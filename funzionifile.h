@@ -9,8 +9,8 @@ void aggiungi();
 void modifica();
 void ricerca();
 void cancellazione();
-void quicksort(FILE *file, int piccolo, int grande);
-int partizionaFile(FILE *file, int piccolo, int grande);
+void quicksort(studente *records, int piccolo, int grande);
+int partizionaFile(studente *records, int piccolo, int grande);
 void ordinamento();
 void installazione();
 void totstatistiche();
@@ -24,6 +24,7 @@ void aggiornatesi(FILE *file);
 void cancellatesi(FILE *file);
 void trovaparola(FILE *file);
 void trovacodice(FILE *file);
+void scambia(studente *a, studente *b);
 void stampa(FILE *file);
 void statistiche(FILE *file);
 void download(FILE *file);
@@ -194,28 +195,54 @@ void ricerca() //apertura del file per andare a ricercare la tesi di un'utente i
     fclose(file);
 }
 
-void ordinamento()
+void ordinamento() //apertura del file in diverso modo affinche possa scrivere la struttura ordinata
 {
     FILE *file = fopen("studente.bin", "rb");
-    if (file == NULL)
-    {
+    if (file == NULL) {
         printf("Impossibile aprire il file.\n");
         return;
     }
 
     fseek(file, 0, SEEK_END);
-    long numRecords = ftell(file) / sizeof(studente); //serve a determinare il numero di record presente nel file 
-    /*La chiamata fseek(file, 0, SEEK_END) posiziona il puntatore del file alla fine del file.
-      La chiamata ftell(file) restituisce la posizione corrente del puntatore del file, che corrisponde alla dimensione totale del file in byte.
-      Dividendo la dimensione totale del file per la dimensione di ciascun record (calcolata utilizzando sizeof(studente)), si ottiene il numero di record nel file.*/
+    long numRecords = ftell(file) / sizeof(studente);
     rewind(file);
 
-    quicksort(file, 0, numRecords - 1);
+    studente *records = malloc(numRecords * sizeof(studente));
+    if (records == NULL) {
+        printf("Errore di allocazione della memoria.\n");
+        fclose(file);
+        return;
+    }
 
+    fread(records, sizeof(studente), numRecords, file);
 
-    stampa(file);
+    quicksort(records, 0, numRecords - 1);
 
     fclose(file);
+
+    file = fopen("studente.bin", "wb");
+    if (file == NULL) {
+        printf("Impossibile aprire il file.\n");
+        free(records);
+        return;
+    }
+
+    fwrite(records, sizeof(studente), numRecords, file);
+
+    fclose(file);
+    free(records);
+
+    printf("Ordinamento completato.\n");
+    
+    
+    file = fopen("studente.bin", "rb");
+    if (file == NULL) {
+        printf("Impossibile aprire il file.\n");
+        return;
+    }
+    stampa(file);
+    fclose(file);
+
 }
 
 void installazione() //apertura del file per il download e la valutazione
@@ -623,7 +650,7 @@ void cancellatesi(FILE* file) //funzione per la cancellazione della tesi dell'ut
     }
 }
 
-void trovaparola(FILE *file)
+void trovaparola(FILE *file)  //funzione per trovare la parola o la sottostringa di una parola al fine della ricerca di un file
 {
     char opzione_str[10];
     unsigned int opzione;
@@ -804,73 +831,85 @@ void trovacodice(FILE *file) //funzione per la ricerca attraverso il codice scel
     }
 }
 
-void quicksort(FILE *file, int piccolo, int grande)
+//funzioni per l'ordinamento
+void quicksort(studente *records, int piccolo, int grande) 
 {
-    if (piccolo < grande)
+    if (piccolo < grande) 
     {
-        int pivot = partizionaFile(file, piccolo, grande);
-        quicksort(file, piccolo, pivot - 1);
-        quicksort(file, pivot + 1, grande);
+        int pivot = partizionaFile(records, piccolo, grande);
+        quicksort(records, piccolo, pivot - 1);
+        quicksort(records, pivot + 1, grande);
     }
 }
 
-int partizionaFile(FILE *file, int piccolo, int grande)
+int partizionaFile(studente *records, int piccolo, int grande) 
 {
-    studente pivot;
+    studente pivot = records[grande];
     int i = piccolo - 1;
 
-    fseek(file, grande * sizeof(studente), SEEK_SET);
-    fread(&pivot, sizeof(studente), 1, file);
-
-    for (int j = piccolo; j <= grande - 1; j++)
-    {
-        fseek(file, j * sizeof(studente), SEEK_SET);
-        studente corrente;
-        fread(&corrente, sizeof(studente), 1, file);
-
-        if (corrente.voto >= pivot.voto)
-        {
+    for (int j = piccolo; j <= grande - 1; j++) {
+        if (records[j].voto >= pivot.voto) {
             i++;
-            fseek(file, i * sizeof(studente), SEEK_SET);
-            fwrite(&corrente, sizeof(studente), 1, file);
-            fseek(file, j * sizeof(studente), SEEK_SET);
-            fwrite(&pivot, sizeof(studente), 1, file);
+            scambia(&records[i], &records[j]);
         }
     }
 
-    fseek(file, (i + 1) * sizeof(studente), SEEK_SET);
-    studente temp;
-    fread(&temp, sizeof(studente), 1, file);
-    fseek(file, grande * sizeof(studente), SEEK_SET);
-    fwrite(&temp, sizeof(studente), 1, file);
-    fseek(file, (i + 1) * sizeof(studente), SEEK_SET);
-    fwrite(&pivot, sizeof(studente), 1, file);
+    scambia(&records[i + 1], &records[grande]);
 
     return (i + 1);
 }
 
-void stampa(FILE *file) //stampa i dati ordinati
+void scambia(studente *a, studente *b) 
+{
+    studente temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void stampa(FILE *file) //stampa il file ordinato 
 {
 
     studente stud;
-    while (fread(&stud, sizeof(studente), 1, file) == 1)
-    {
+    while (fread(&stud, sizeof(studente), 1, file) == 1) {
         printf("------------------------\n");
         printf("Nome: %s\n", stud.nome);
         printf("Cognome: %s", stud.cognome);
         printf("Numero tesi: %u \n", stud.n_tesi);
         printf("Titolo tesi: %s", stud.titolo_tesi);
         printf("Materia: ");
-        // Codice per stampare la materia corretta
-        printf("Parole chiave: %s, %s, %s \n", stud.parole_chiave, stud.parole_chiave1, stud.parole_chiave2);
+        switch (stud.mat)
+            {
+                case Informatica:
+                printf("Informatica\n");
+                break;
+                case Biotecnologie:
+                printf("Biotecnologie\n");
+                break;
+                case IngegneriaMeccanica:
+                printf("Ingegneria Meccanica\n");
+                break;
+                case IngegneriaGestionale:
+                printf("Ingegneria Gestionale\n");
+                break;
+                case IngegneriaInformatica:
+                printf("Ingegneria Informatica\n");
+                break;
+                case Psicologia:
+                printf("Psicologia\n");
+                break;
+                default:
+                printf("Sconosciuta\n");
+                break;
+            }
+        printf("Parole chiave: %s, %s, %s\n", stud.parole_chiave, stud.parole_chiave1, stud.parole_chiave2);
         printf("Anno accademico: %u - %u\n", stud.anno_accademico, stud.anno_accademico2);
-        printf("Abstract: %s", stud.abstract);
-        printf("Relatore: %s", stud.relatore);
+        printf("Abstract: %s\n", stud.abstract);
+        printf("Relatore: %s\n", stud.relatore);
         printf("Totale Download: %u\n", stud.totdownload);
         printf("Voto Medio: %.2f\n", stud.voto);
         printf("------------------------\n");
-
     }
+
 }
 
 void download(FILE *file) //funzione che simula il download della tesi e che permette di valutare la sua utilità 
@@ -910,7 +949,7 @@ void download(FILE *file) //funzione che simula il download della tesi e che per
                 trovato = 1;
                 if (trovato)
                 {   
-                    
+                    temposcaricamento();
                     printf("Nome: %s\n", stud.nome);
                     printf("Cognome: %s", stud.cognome);
                     printf("Numero tesi: %u \n", stud.n_tesi);
